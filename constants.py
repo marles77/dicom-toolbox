@@ -20,7 +20,8 @@ class Constants:
     CURR_DIR = os.getcwd()
     BG_COLOR = "#CFD8DC"
     WINDOW_SIZE = (1200, 600)
-    SETTINGS_PATH = 'extra/settings.json'
+    SETTINGS_PATH = 'config/settings.json'
+    ASSETS_FOLDER = 'assets/'
     AUTHOR = "Marcin Leśniak"
     VERSION = "0.1.0"
 

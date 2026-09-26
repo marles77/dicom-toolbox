@@ -19,6 +19,7 @@ from PIL import Image, ImageTk
 import json
 #from functools import partial
 from pprint import pprint
+from helpers import resource_path
 #import time
 
 
@@ -26,7 +27,8 @@ class App(ttk.Window):
     def __init__(self) -> None:
         super().__init__(title=Constants.APP_TITLE, themename=Constants.APP_THEME, size=Constants.WINDOW_SIZE, resizable=(1, 1))
 
-        self._app_icon = PhotoImage(file="extra/icon.png")
+        logo_path = resource_path(Constants.ASSETS_FOLDER+"icon.png")
+        self._app_icon = PhotoImage(file=str(logo_path))
         self.wm_iconphoto(False, self._app_icon)
 
         self.folder_var = ttk.StringVar()
@@ -76,6 +78,7 @@ class App(ttk.Window):
         self.button_entry_folder = ttk.Button(master, text="Katalog wejściowy", command=self.select_folder, bootstyle="secondary[300]", icon="folder")
 
         self.entry_path = ttk.Entry(master=master, textvariable=self.folder_var)
+        self.entry_path.bind("<Return>", self.on_entry_path_enter)
         self.target_path = ttk.Entry(master=master, textvariable=self.target_folder_var)
 
         self.file_list = ttk.Treeview(master, columns=("filename", "size"), show="headings", height=5, bootstyle="info[200]")
@@ -110,7 +113,9 @@ class App(ttk.Window):
         #====================== RIGHT PANEL ====================
 
         self.button_target_folder = ttk.Button(master, text="Katalog docelowy", command=self._select_target_folder, bootstyle="secondary[300]", icon="folder")
-        self.label_selected_file = ttk.Label(master, textvariable=self.info_selected_file, justify="left", anchor="nw", foreground="#b02a37", background=self.style.colors.bg, width=50, font=('Arial', 8))
+        #self.label_selected_file = ttk.Label(master, textvariable=self.info_selected_file, justify="left", anchor="nw", foreground="#b02a37", background=self.style.colors.bg, width=50, font=('Arial', 8))
+        self.text_selected_file = ttk.ScrolledText(master, width=40, height=10, wrap="word", auto_hide=True, foreground="#b02a37", background=self.style.colors.bg, font=('Arial', 8))
+        #self.text_selected_file.configure(state="disabled")
         self.check_dicom_preview = ttk.Checkbutton(master, text="Włącz podgląd", variable=self.dicom_preview)
         self.check_dicom_preview.configure(takefocus=False)
         self.canvas = ttk.Canvas(master, width=50, height=250, autostyle=False, background=self.style.colors.bg, highlightthickness=0)
@@ -134,7 +139,9 @@ class App(ttk.Window):
 
         #====================== RIGHT PANEL GRID ====================
 
-        self.label_selected_file.grid(column=3, row=2, sticky=NSEW, padx=1, pady=2, columnspan=2, rowspan=1)
+        #self.label_selected_file.grid(column=3, row=2, sticky=NSEW, padx=1, pady=2, columnspan=2, rowspan=1)
+        self.text_selected_file.grid(column=3, row=2, sticky=NSEW, padx=1, pady=2, columnspan=2, rowspan=1)
+
         self.check_dicom_preview.grid(column=3, row=3, sticky=NSEW, padx=1, pady=2, columnspan=1, rowspan=1)
         self.canvas.grid(column=4, row=3, sticky=NSEW, padx=1, pady=2, columnspan=1, rowspan=3)
         self.canvas.bind("<Configure>", self._reposition_image)
@@ -154,7 +161,8 @@ class App(ttk.Window):
 
     def select_folder(self) -> None:
 
-        with open(Constants.SETTINGS_PATH, 'r') as f:
+        config_path = resource_path(Constants.SETTINGS_PATH)
+        with open(config_path, 'r', encoding="utf-8") as f:
             settings = json.load(f)
         init_dir = settings['settings']['path']
          
@@ -166,7 +174,7 @@ class App(ttk.Window):
             #print(self.folder_var.get(), " - ", type(self.folder_var.get()))
             settings['settings']['path'] = self.folder_var.get()
             pprint(settings)
-            with open(Constants.SETTINGS_PATH, 'w') as f:
+            with open(config_path, 'w', encoding="utf-8") as f:
                json.dump(settings, f)
 
             self._update_file_list()
@@ -190,7 +198,8 @@ class App(ttk.Window):
         try: 
             ds = pydicom.dcmread(file_name)
 
-            info = []
+            info_head = []
+            info_full = []
 
             for tag in [
                 "SeriesDescription",
@@ -203,13 +212,37 @@ class App(ttk.Window):
                 "InversionTime",
                 "FlipAngle",
             ]:
-                info.append(f"{tag}: {getattr(ds, tag, None)}")
+                info_head.append(f"{tag}: {getattr(ds, tag, None)}")
+            
+            for elem in ds:
+                value = elem.value
+
+                if elem.tag == (0x7FE0, 0x0010):
+                    continue  # Skip PixelData
+
+                if value is None:
+                    continue
+
+                if isinstance(value, str) and not value.strip():
+                    continue
+
+                if isinstance(value, (list, tuple)) and len(value) == 0:
+                    continue
+
+
+                info_full.append(f"{elem.name} ({elem.tag}): {value}")
                 
             pixels = self._open_dicom(ds)
             height, width  = pixels.shape
-            info.append(f"{'Resolution'}: {width}:{height}")
+            info_head.insert(0, f"{'Resolution'}: {width}:{height}")
 
-            self.info_selected_file.set(f"{Path(file_name).name}\n" + "\n".join(info))
+            #print(f"{Path(file_name).name}\n" + "\n".join(info))
+
+            #self.info_selected_file.set(f"{Path(file_name).name}\n" + "\n".join(info))
+            self.text_selected_file.delete("1.0", "end")
+            self.text_selected_file.insert("1.0", 
+                                           f"{Path(file_name).name}\n" + "\n".join(info_head) +
+                                           f"\n\nPEŁNE METADANE:\n" + "\n".join(info_full))
 
             if self.dicom_preview.get():
                 self._display_dicom(pixels)
@@ -218,7 +251,9 @@ class App(ttk.Window):
 
         except (pydicom.errors.InvalidDicomError) as e:
             print("not a valid DICOM file")
-            self.info_selected_file.set("Plik DICOM niepoprawny")
+            #self.info_selected_file.set("Plik DICOM niepoprawny")
+            self.text_selected_file.delete("1.0", "end")
+            self.text_selected_file.insert("1.0", "Plik DICOM niepoprawny")
             self.canvas.delete("all")
             self.button_size.state(["!disabled"])
 
@@ -228,6 +263,12 @@ class App(ttk.Window):
         self.button_size.state(["!disabled"])
         self.button_ext.state(["!disabled"])
         return "break"
+
+
+    def on_entry_path_enter(self, event=None):
+        #self.folder_var.set(folder)
+        self.folder = Path(self.folder_var.get())
+        self._update_file_list()
 
 
     def _update_file_list(self) -> None:
@@ -244,41 +285,66 @@ class App(ttk.Window):
         if self.num_files == 0:
             return
 
-        self._update_next_file()
+        #self._update_next_file()
+
+        for file in self.files:
+            if file.is_file():
+                size = file.stat().st_size // 1024
+            
+                self.file_list.insert(
+                    "",
+                    END,
+                    values=(file.name, f"{size:,d}KB")
+                )
+
 
         self.button_selectall.state(["!disabled"])
-        #self.button_ext.state(["!disabled"])
         self.info_folder.set(f"Plików w folderze: {self.num_files}")
+        self.text_selected_file.delete("1.0", "end")
 
-    def _update_next_file(self) -> None:
-        try:
-            file = next(self.files)
-        except StopIteration:
-            self.progress.set(100)
-            return
 
-        if file.is_file():
-            size = file.stat().st_size
+    # def _update_next_file(self) -> None:
+    #     try:
+    #         file = next(self.files)
+    #     except StopIteration:
+    #         self.progress.set(100)
+    #         return
 
-            self.file_list.insert(
-                "",
-                END,
-                values=(file.name, size)
-            )
+    #     if file.is_file():
+    #         size = file.stat().st_size
 
-        self.processed_files += 1
-        self.progress.set(
-            self.processed_files / self.num_files * 100
-        )
+    #         self.file_list.insert(
+    #             "",
+    #             END,
+    #             values=(file.name, size)
+    #         )
 
-        # Process the next file after Tkinter has had a chance
-        # to update the interface.
-        self.after(10, self._update_next_file)
+    #     self.processed_files += 1
+    #     self.progress.set(
+    #         self.processed_files / self.num_files * 100
+    #     )
+
+    #     # Process the next file after Tkinter has had a chance
+    #     # to update the interface.
+    #     self.after(10, self._update_next_file)
+
 
     # ============== DICOM EXTENSION ==================
 
     def add_extension(self) -> None:
-        target_folder = Path(self.target_folder_var.get())
+        target = self.target_folder_var.get().strip()
+        target_folder = Path(target)
+        #source = self.folder_var.get().strip()
+
+        if not target:
+            dialog = PLWarning(
+                message=f"Wybierz katalog docelowy",
+                title="Uwaga!",
+                parent=self,
+            )
+    
+            dialog.show()
+            return
 
         def handle_answer():
             answer = dialog.result
@@ -525,9 +591,8 @@ class App(ttk.Window):
             0: do not overwrite
             1: overwrite one
             2: overwrite all
-            3: file does not exist yet
         '''
-        self.files_change = 3
+        #self.files_change = 3
         print("change_all:", change_all)
 
         def handle_answer():
@@ -656,7 +721,8 @@ class App(ttk.Window):
 
     def _select_target_folder(self) -> None:
 
-        with open(Constants.SETTINGS_PATH, 'r') as f:
+        config_path = resource_path(Constants.SETTINGS_PATH)
+        with open(config_path, 'r', encoding="utf-8") as f:
             settings = json.load(f)
         init_dir = settings['settings']['target']
         
@@ -680,7 +746,7 @@ class App(ttk.Window):
             self.target_folder_var.set(str(folder.as_posix()))
             settings['settings']['target'] = self.target_folder_var.get()
             #pprint(settings)
-            with open(Constants.SETTINGS_PATH, 'w') as f:
+            with open(config_path, 'w', encoding="utf-8") as f:
                json.dump(settings, f)
 
 

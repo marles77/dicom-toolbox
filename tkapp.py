@@ -146,7 +146,10 @@ class App(ttk.Window):
 
 
     def show_info(self):
-        Messagebox.show_info(title="O programie", message=f"Autor: {Constants.AUTHOR}\nWersja: {Constants.VERSION}\nProgram umożliwia zmianę rozdzielczości i rozszerzenia plików DICOM") 
+        Messagebox.show_info(
+            title="O programie", 
+            message=f"Autor: {Constants.AUTHOR}\nWersja: {Constants.VERSION}\nProgram umożliwia zmianę rozdzielczości i rozszerzenia plików DICOM",
+            icon=self._app_icon) 
 
 
     def select_folder(self) -> None:

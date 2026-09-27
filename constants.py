@@ -1,5 +1,5 @@
 # ==========================================================
-# DICOM manager
+# DICOM Toolbox
 # Author: Marcin Leśniak, PhD
 #
 # Constants

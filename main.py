@@ -1,5 +1,5 @@
 # ==========================================================
-# DICOM manager - app to manage DICOM files
+# DICOM Toolbox - app to manage DICOM files
 # Author: Marcin Leśniak, PhD
 #
 # Main

@@ -1,5 +1,5 @@
 # ==========================================================
-# DICOM manager
+# DICOM Toolbox
 # Author: Marcin Leśniak, PhD
 #
 # TKapp
@@ -608,6 +608,12 @@ class App(ttk.Window):
 
     def _save_file(self, source_path: Path=None, target_path: Path=None, ds: pydicom.dataset.FileDataset=None, change_all: bool=None) -> int:
         '''
+        Parameters:
+            source_path: folder from which files will be copied
+            target_path: folder to which files will be copied
+            ds: pydicom dataset (dicom file)
+            change_all: whether or not 'yes to all' option was selected
+        Returns:
             0: do not overwrite
             1: overwrite one
             2: overwrite all
@@ -657,7 +663,7 @@ class App(ttk.Window):
         
     # ============== DICOM OPEN ==================
 
-    def _open_dicom(self, ds: None) -> tuple|None:
+    def _open_dicom(self, ds: None) -> np.ndarray|None:
 
         if not ds:
             return None
@@ -690,7 +696,7 @@ class App(ttk.Window):
 
     # ============== DICOM DISPLAY ==================
 
-    def _display_dicom(self, pixels) -> None:
+    def _display_dicom(self, pixels: np.ndarray) -> None:
         self.original_image = Image.fromarray(pixels)
         self._reposition_image()
 

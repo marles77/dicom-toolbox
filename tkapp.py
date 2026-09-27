@@ -20,8 +20,13 @@ import json
 #from functools import partial
 from pprint import pprint
 from helpers import resource_path
+import logging
 #import time
 
+# Configure logging
+logging.basicConfig(filename=resource_path('log/errors.log'),
+                    level=logging.ERROR,
+                    format='%(asctime)s %(levelname)s %(message)s')
 
 class App(ttk.Window):
     def __init__(self) -> None:
@@ -43,6 +48,7 @@ class App(ttk.Window):
         self.photo = None
         self.dicom_preview = ttk.BooleanVar()
         self.files_change = None
+        self.info_error = ttk.StringVar()
 
         self.protocol('WM_DELETE_WINDOW', self.on_close)
         self.frame = ttk.Frame(master=self, padding=10)
@@ -109,6 +115,7 @@ class App(ttk.Window):
 
         self.progress_bar = ttk.Progressbar(master, variable=self.progress, maximum=100, bootstyle="success", mode="determinate")
         self.progress.set(0) 
+        self.label_errors = ttk.Label(master, textvariable=self.info_error, font=('Arial', 8))
 
         #====================== RIGHT PANEL ====================
 
@@ -136,6 +143,7 @@ class App(ttk.Window):
         self.entry_size.grid(column=1, row=5, sticky=NSEW, padx=1, pady=20, columnspan=1)
 
         self.progress_bar.grid(column=0, row=6, sticky=EW, padx=1, pady=2, columnspan=5)
+        self.label_errors.grid(column=0, row=7, sticky=EW, padx=1, pady=2, columnspan=5)
 
         #====================== RIGHT PANEL GRID ====================
 
@@ -173,7 +181,7 @@ class App(ttk.Window):
             self.folder = Path(folder)
             #print(self.folder_var.get(), " - ", type(self.folder_var.get()))
             settings['settings']['path'] = self.folder_var.get()
-            pprint(settings)
+            #pprint(settings)
             with open(config_path, 'w', encoding="utf-8") as f:
                json.dump(settings, f)
 
@@ -191,7 +199,8 @@ class App(ttk.Window):
         iid = selected[0]
         item = self.file_list.item(iid)
         file_name = f"{self.folder_var.get()}/{item['values'][0]}"
-        print(f"selected: {Path(file_name).name}")
+        #self.info_error.set(f"selected: {Path(file_name).name}")
+        #print(f"selected: {Path(file_name).name}")
         #print(self.dicom_preview.get())
         self.button_ext.state(["!disabled"])
 
@@ -248,10 +257,13 @@ class App(ttk.Window):
                 self._display_dicom(pixels)
 
             self.button_size.state(["!disabled"])
+            self.info_error.set("")
 
         except (pydicom.errors.InvalidDicomError) as e:
-            print("not a valid DICOM file")
+            #print("not a valid DICOM file")
             #self.info_selected_file.set("Plik DICOM niepoprawny")
+            logging.error(f"Error in select_file: {e}")
+            self.info_error.set(e)
             self.text_selected_file.delete("1.0", "end")
             self.text_selected_file.insert("1.0", "Plik DICOM niepoprawny")
             self.canvas.delete("all")
@@ -353,7 +365,8 @@ class App(ttk.Window):
                 self._change_extensions(target_folder)
 
             elif answer == Caps.CAP_NO:
-                print("No changes")
+                #print("No changes")
+                self.info_error.set("No changes")
 
         dialog = PLMessageDialog(
             message=f"Zmienić rozszerzenia plików?\nZaznaczonych plików: {len(self.file_list.selection())}",
@@ -389,7 +402,8 @@ class App(ttk.Window):
             self.progress.set(100)
             #self._update_file_list()
 
-            print(f"Extension added to: {self.counter} files")
+            #print(f"Extension added to: {self.counter} files")
+            self.info_error.set(f"Rozszerzenie dodane do {self.file_index} {'pliku' if self.file_index == 1 else 'plików'}")
             return
 
         item_id = self.selected_items[self.file_index]
@@ -409,7 +423,7 @@ class App(ttk.Window):
                     change_all=self.change_all
                 )
 
-                print("res:", res)
+                #print("res:", res)
 
                 if res:
                     self.counter += 1
@@ -449,7 +463,8 @@ class App(ttk.Window):
                 self._resize_dicom(source_directory, target_folder)
 
             elif answer == Caps.CAP_NO:
-                print("No changes")
+                #print("No changes")
+                self.info_error.set("No changes")
 
         dialog = PLMessageDialog(
             message=f"Zmienić rozmiar obrazów?\nZaznaczonych plików: {len(self.file_list.selection())}",
@@ -471,7 +486,9 @@ class App(ttk.Window):
             x = int(self.size.get().strip())
             size = (x, x)
         except ValueError as e:
-            print(e)
+            #print(e)
+            logging.error(f"Error in _resize_dicom: {e}")
+            self.info_error.set(e)
             return
 
         self.resize_source_directory = source_directory
@@ -500,13 +517,14 @@ class App(ttk.Window):
 
             nl = "\n"
             m1 = (
-                f"Zmieniono rozdzielczość {self.resize_counter} "
-                f"{'pliku' if self.resize_counter == 1 else 'plików'} "
+                f"Zmieniono rozdzielczość {self.resize_index} "
+                f"{'pliku' if self.resize_index == 1 else 'plików'} "
                 f"DICOM"
-                f"{' i zapisano w: ' + str(self.resize_target_folder.as_posix()) if self.resize_counter > 0 else '.'}"
+                f"{' i zapisano w: ' + str(self.resize_target_folder.as_posix()) if self.resize_index > 0 else '.'}"
             )
 
-            print(m1)
+            #print(m1)
+            self.info_error.set(m1)
 
             dialog = PLWarning(
                 message=m1,
@@ -564,16 +582,18 @@ class App(ttk.Window):
                             change_all=self.resize_change_all
                         )
 
-                        print("res:", res)
+                        #print("res:", res)
 
                         if res:
                             self.resize_counter += 1
                             self.resize_change_all = (res == 2)
 
                 except Exception as e:
-                    print(
-                        f"Error processing {source_path.name}: {e}"
-                    )
+                    # print(
+                    #     f"Error processing {source_path.name}: {e}"
+                    # )
+                    logging.error(f"Error in _resize_next_file: {e}")
+                    self.info_error.set(f"Error processing {source_path.name}: {e}")
 
         # Advance progress, even if the file was skipped or failed
         self.resize_index += 1
@@ -593,22 +613,25 @@ class App(ttk.Window):
             2: overwrite all
         '''
         #self.files_change = 3
-        print("change_all:", change_all)
+        #print("change_all:", change_all)
 
         def handle_answer():
             answer = dialog.result
 
             if answer == Caps.CAP_NO:
-                print("No changes")
+                #print("No changes")
+                self.info_error.set("No changes")
                 self.files_change = 0
         
             elif answer == Caps.CAP_YES:
-                print("OK, można nadpisać")
+                #print("OK, można nadpisać")
+                self.info_error.set("OK, można nadpisać")
                 # #image.save(output_path)
                 self.files_change = 1
 
             elif answer == Caps.CAP_YES_ALL:
-                print("OK, można nadpisać wszystkie")
+                self.info_error.set("OK, można nadpisać wszystkie")
+                #print("OK, można nadpisać wszystkie")
                 #shutil.copy2(source_path, target_path)
                 self.files_change = 2
 
@@ -659,7 +682,9 @@ class App(ttk.Window):
             return pixels
 
         except (pydicom.errors.InvalidDicomError, Exception) as e:
-            print("problem with a DICOM file")
+            #print("problem with a DICOM file")
+            logging.error(f"Error in _open_dicom: {e}")
+            self.info_error.set(e)
             return None
 
 

@@ -191,7 +191,6 @@ class App(ttk.Window):
     def select_file(self, event) -> None:
 
         selected = self.file_list.selection()
-        #size = None
 
         if not selected:
             return
@@ -210,18 +209,8 @@ class App(ttk.Window):
             info_head = []
             info_full = []
 
-            for tag in [
-                "SeriesDescription",
-                "ProtocolName",
-                "SequenceName",
-                "ScanningSequence",
-                "SequenceVariant",
-                "RepetitionTime",
-                "EchoTime",
-                "InversionTime",
-                "FlipAngle",
-            ]:
-                info_head.append(f"{tag}: {getattr(ds, tag, None)}")
+            for name, tag in Constants.TAGS.items():
+                info_head.append(f"{name}: {getattr(ds, name.replace(' ', ''), None)}")
             
             for elem in ds:
                 value = elem.value
@@ -239,7 +228,7 @@ class App(ttk.Window):
                     continue
 
 
-                info_full.append(f"{elem.name} ({elem.tag}): {value}")
+                info_full.append(f"{elem.name}: {value}")
                 
             pixels = self._open_dicom(ds)
             height, width  = pixels.shape
@@ -257,7 +246,10 @@ class App(ttk.Window):
                 self._display_dicom(pixels)
 
             self.button_size.state(["!disabled"])
-            self.info_error.set("")
+            if len(selected) > 1:
+                self.selected_multiple()
+            else:
+                self.info_error.set("")
 
         except (pydicom.errors.InvalidDicomError) as e:
             #print("not a valid DICOM file")
@@ -274,7 +266,51 @@ class App(ttk.Window):
         self.file_list.selection_set(self.file_list.get_children())
         self.button_size.state(["!disabled"])
         self.button_ext.state(["!disabled"])
+        self.selected_multiple()
         return "break"
+
+
+    def selected_multiple(self) -> None:
+        selected = list(self.file_list.selection())
+        slices = []
+
+        for iid in selected:
+            item = self.file_list.item(iid)
+            file_name = f"{self.folder_var.get()}/{item['values'][0]}"
+            ds = ds = pydicom.dcmread(file_name, stop_before_pixels=True)
+            ipp = np.array(ds.ImagePositionPatient, dtype=float)
+            iop = np.array(ds.ImageOrientationPatient, dtype=float)
+            slices.append((ipp, iop, file_name))
+        
+        if len(slices) < 2:
+            raise ValueError("Need at least 2 valid DICOM slices.")
+
+        # Use the first slice's orientation to get the slice normal
+        iop = slices[0][1]
+        row_direction = iop[:3]
+        col_direction = iop[3:]
+
+        normal = np.cross(row_direction, col_direction)
+        normal /= np.linalg.norm(normal)
+
+        # Project each 3D position onto the slice normal
+        positions = [
+            (np.dot(ipp, normal), ipp, file_name)
+            for ipp, _, file_name in slices
+        ]
+
+        # Sort slices by their physical position
+        positions.sort(key=lambda x: x[0])
+
+        # Calculate distances between consecutive slices
+        projections = np.array([p[0] for p in positions])
+        spacings = np.diff(projections)
+
+        m1 = f"Liczba warstw: {len(positions)} "
+        m2 = f"Odstępy między warstwami (mm): {spacings}"
+        m3 = f"Mediana odstępów między warstwami: {np.median(spacings):.2f} mm"
+        #print(f"{m1} {m2} {m3}")
+        self.info_error.set(m1 + m3)
 
 
     def on_entry_path_enter(self, event=None):

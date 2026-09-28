@@ -23,7 +23,19 @@ class Constants:
     SETTINGS_PATH = 'config/settings.json'
     ASSETS_FOLDER = 'assets/'
     AUTHOR = "Marcin Leśniak"
-    VERSION = "0.1.0"
+    VERSION = "0.1.0",
+    TAGS = {
+                "Series Description": (0x0008, 0x103E),
+                "Protocol Name": (0x0018, 0x1030),
+                "Sequence Name": (0x0018, 0x0024),
+                "Scanning Sequence": (0x0018, 0x0020),
+                "Sequence Variant": (0x0018, 0x0021),
+                "Spacing Between Slices": (0x0018, 0x0088),
+                "Repetition Time": (0x0018, 0x0080),
+                "Echo Time": (0x0018, 0x0081),
+                "Inversion Time": (0x0018, 0x0082),
+                "Flip Angle": (0x0018, 0x1314),    
+    }
 
 class Caps:
     CAP_YES = "Tak"
